@@ -1,0 +1,224 @@
+from multiprocessing import Process, Lock
+import jellyfish as jf
+import time
+import csv
+glovewords={}
+with open('glove_word.txt', 'r') as document:
+    glovewords = {}
+    for line in document:
+        line = line.split()
+        if not line:  # empty line
+            continue
+        glovewords[line[0]] = []
+def lcs1(X, Y, m, n): 
+    L = [[0 for x in range(n+1)] for x in range(m+1)]   
+    for i in range(m+1): 
+        for j in range(n+1): 
+            if i == 0 or j == 0: 
+                L[i][j] = 0
+            elif X[i-1] == Y[j-1]: 
+                L[i][j] = L[i-1][j-1] + 1
+            else: 
+                L[i][j] = max(L[i-1][j], L[i][j-1])  
+    index = L[m][n]  
+    lcs = [""] * (index+1) 
+    lcs[index] = "" 
+    i = m 
+    j = n 
+    left=[]
+    flag=1
+    flag1=0
+    right=[]
+    while i > 0 and j > 0: 
+        #print(X[i-1],' ',Y[j-1])
+        if X[i-1] == Y[j-1]: 
+            lcs[index-1] = X[i-1] 
+            i-=1
+            right.extend(Y[j-1])
+            j-=1
+            index-=1
+            if i==0 :
+                #print(',')
+                left.extend(',')
+            flag=0
+            flag1=0
+        elif L[i-1][j] > L[i][j-1]:
+            if flag==0:
+                left.extend(',')
+                flag=1
+            if flag1==0:
+                right.extend(',')
+                flag1=1
+            i-=1
+        else:
+            if flag==0:
+                #print(',')
+                left.extend(',')
+                flag=1
+            if flag1==0:
+                right.extend(',')
+                flag1=1
+            left.extend(Y[j-1])
+            j-=1
+    while i > 0:
+        i-=1
+    while j > 0:
+        left.extend(Y[j-1])
+        j-=1
+    string="".join(left)
+    string1=string[::-1]
+    string5="".join(right)
+    string6=string5[::-1]
+#     print(string6)
+    string2=[]
+    i=0
+    while i<(len(X)):
+        if X[i]=='!':
+            if i!=0:
+                string2.extend(','+X[i]+X[i+1]+X[i+2])
+            else:
+                string2.extend(X[i]+X[i+1]+X[i+2])
+            i+=3
+        else:
+            i+=1
+    if(X[i-1])!='!':
+        string2.extend(',')
+    string3="".join(string2)
+    return "".join(lcs),string1,string3,string6
+def check(x,y):
+    z,w,u,v=lcs1(x,y,len(x),len(y))
+    u=u.split(',')
+    w=w.split(',')
+#     print(u)
+#     print(w)
+    if(len(w)!=len(u)):
+        return -1
+    t=[]
+    t.append([])
+    i=0
+    j=0
+    while i <len(x):
+        if x[i]=='!':
+            if(i!=0):
+                t[j]="".join(t[j])
+            i+=3
+            j+=1
+            t.append([])
+        else:
+            t[j].extend(x[i])
+            i+=1
+    t[j]="".join(t[j])
+#     print(t)
+    v=v.split(',')
+#     print(v)
+    i=0
+    while i <len(t):
+        try:
+            if len(t[i])==0 and v[i]!='':
+                return -1
+            elif  len(t[i])!=0 and v[i]=='':
+                return -1
+            elif  len(t[i])==0 and v[i]=='':
+                i+=1
+                continue
+            elif t[i]!=v[i]:
+                return -1
+        except IndexError:
+            return -1
+        i+=1
+    
+    i=0
+    p=[]
+    while i<len(w):
+        if w[i]=='' and u[i]!='':
+            return -1
+        elif w[i]!='' and u[i]=='':
+            return -1
+        if w[i]=='' and u[i]=='':
+            i+=1
+            continue
+        p.append(w[i])
+        i+=1
+    
+    return p
+def add(X,Y):
+    i=0 
+    j=0
+    while i<(len(X)):
+        if X[i]=='#':
+            i+=3
+            j+=1
+        else:
+            i+=1
+    string2=[]
+    for i in range(j+1) :
+        string2.append([])
+#     print(string2)
+    i=j=0
+    while i<(len(X)):
+        if X[i]=='#':
+            j+=1
+            i+=3
+        else:
+            string2[j].extend(X[i])
+            i+=1
+#     print(j)
+#     print(len(Y))
+    if (j)!=(len(Y)):
+        return -1
+#     print(string2)
+    z=[]
+    i=0
+    while i < j:
+        z.extend(string2[i])
+        z.extend(Y[i])
+        i+=1
+    z.extend(string2[i])
+    return "".join(z)
+def transform(x,y):
+    X=x[0]
+    Y=check(X,y)
+    if(Y==-1):
+        return -1
+#     print(x[0])
+#     print(Y)
+    z=add(x[1],Y)
+    return z
+
+pattern={}
+file_path='falsepairs'+str(ctr)+'.csv'
+i=0
+with open(file_path, 'a') as outcsv:   
+    writer = csv.writer(outcsv, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL, lineterminator='\n')
+    writer.writerow(['Affix', 'Source word', 'Derived word','sourceSkeleton','targetSkeleton'])
+    for p, value in pattern.items():
+#         if(i==40):
+#             break
+        for q, affixset in value.items():
+            pat=[p,q]
+            i=0
+            print('\n\n')
+            print(pat[0])
+            print(pat[1])
+            print('\n\n')
+            for der in glovewords:
+                if(i>2000):
+                    break
+        #         print(der,end='\t')
+                a=transform(pat,der)
+        #         print(a)
+                if a==-1:
+                    continue
+                try:
+                    i+=1
+                    glovewords[a]
+                    for val in affixset: 
+                        writer.writerow([val,a,der,pat[1],pat[0]])
+                        print(val,end='\t')
+                        print(a,end='\t')
+                        print(der,end='\t')
+                        print(pat[1],end='\t')
+                        print(pat[0])
+                except KeyError:
+                    pass
+		
